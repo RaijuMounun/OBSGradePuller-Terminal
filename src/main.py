@@ -13,8 +13,8 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 # Kendi modüllerimizi import ediyoruz
 from src.services.auth_manager import AuthManager
 from src.services.obs_client import OBSClient
-from src.services.captcha_solver.captcha_solver import CaptchaSolver
 from src.ui.display import DisplayManager
+from src.handlers import create_captcha_handler
 
 def main():
     # 1. YÖNETİCİLERİ BAŞLAT
@@ -72,46 +72,8 @@ def main():
     # Login Loading Animasyonu
     with ui.console.status("[bold green]OBS Sistemine Bağlanılıyor...", spinner="dots") as status:
         try:
-            def captcha_handler(path):
-                # 1. Önce AI ile çözmeye çalış
-                ai_result = None
-                try:
-                    solver = CaptchaSolver()
-                    ai_result = solver.solve(path)
-                except Exception as err:
-                    # Model hatası varsa yut, manuele düş
-                    pass 
-                
-                # EĞER AI ÇÖZDÜYSE DİREKT DÖNDÜR (OTOMASYON)
-                if ai_result:
-                    ui.console.print(f"[bold cyan]🤖 AI Otomatik Çözdü: {ai_result}[/bold cyan]")
-                    # Kısa bir bekleme (opsiyonel, kullanıcının görmesi için)
-                    import time
-                    time.sleep(0.5)
-                    return ai_result
-
-                # --- AI BAŞARISIZ İSE MANUEL GİRİŞ ---
-                ui.console.print("[yellow]⚠️ AI Okuyamadı, Manuel Giriş Gerekiyor![/yellow]")
-                
-                # Resmi işletim sisteminde aç
-                import os, subprocess, platform
-                if platform.system() == "Windows": os.startfile(path)
-                elif platform.system() == "Darwin": subprocess.call(("open", path))
-                else: subprocess.call(("xdg-open", path))
-                
-                ui.console.print(f"[yellow]Captcha açıldı ({path})...[/yellow]")
-                
-                # --- KRİTİK HAMLE: Animasyonu durdur ---
-                status.stop()
-                
-                prompt = "Captcha Kodu"
-                code = ui.ask_input(prompt)
-                
-                # Input bitti, animasyonu tekrar başlat
-                status.start()
-                # ---------------------------------------
-                
-                return code
+            # Handler fonksiyonunu oluştur
+            captcha_handler = create_captcha_handler(ui, status)
 
             login_success = client.login(current_user, current_pass, captcha_handler)
             
