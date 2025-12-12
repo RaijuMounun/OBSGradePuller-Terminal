@@ -14,7 +14,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 from src.services.auth_manager import AuthManager
 from src.services.obs_client import OBSClient
 from src.ui.display import DisplayManager
-from src.handlers import create_captcha_handler
+from src.services.captcha_solver.handlers import create_captcha_handler
 
 def main():
     # 1. YÖNETİCİLERİ BAŞLAT
