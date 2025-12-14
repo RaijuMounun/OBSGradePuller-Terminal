@@ -19,7 +19,8 @@ def convert_to_tflite():
     
     # Optimizasyonlar (Opsiyonel ama mobilde iyidir)
     # Default optimizations: Quantization vb. yapar (boyutu kucultur)
-    converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    # KULLANICI ISTEGI: Accuracy kaybi olmamasi icin optimizasyonu kapatiyoruz.
+    # converter.optimizations = [tf.lite.Optimize.DEFAULT]
 
     print("Donusturme basladi...")
     tflite_model = converter.convert()
