@@ -55,7 +55,7 @@ Projeyi yerel ortamınızda çalıştırmak için:
 
 1. Repoyu klonlayın:
 ```Bash
-git clone [https://github.com/RaijuMounun/OBSGradePuller-Terminal.git](https://github.com/RaijuMounun/OBSGradePuller-terminal.git)
+git clone https://github.com/RaijuMounun/OBSGradePuller-Terminal.git
 cd OBSGradePuller
 ```
 
