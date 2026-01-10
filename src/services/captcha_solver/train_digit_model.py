@@ -2,21 +2,40 @@ import tensorflow as tf
 from tensorflow.keras import layers, models
 import os
 
-DATASET_DIR = "dataset_digits"
-MODEL_PATH = "src/services/captcha_solver/digit_model.h5"
+import tensorflow as tf
+from tensorflow.keras import layers, models
+import os
+import argparse
+import sys
+
+# Default Constants (Fallback)
+DEFAULT_DATASET_DIR = "dataset_digits"
+DEFAULT_MODEL_PATH = "src/services/captcha_solver/digit_model.h5"
 IMG_SIZE = (32, 32)
 BATCH_SIZE = 16
 EPOCHS = 35
 
 def main():
-    if not os.path.exists(DATASET_DIR):
-        print("Hata: Dataset digits klasörü yok!")
-        return
+    parser = argparse.ArgumentParser(description="Train Digit Model")
+    parser.add_argument("--dataset_dir", default=DEFAULT_DATASET_DIR, help="Path to dataset directory")
+    parser.add_argument("--model_output", default=DEFAULT_MODEL_PATH, help="Path to save .h5 model")
+    parser.add_argument("--tflite_output", default=None, help="Path to save .tflite model (optional)")
+    
+    args = parser.parse_args()
+    
+    dataset_dir = args.dataset_dir
+    model_output = args.model_output
+    
+    print(f"Dataset: {dataset_dir}")
+    print(f"Output H5: {model_output}")
+
+    if not os.path.exists(dataset_dir):
+        print(f"Hata: Dataset klasörü bulunamadı: {dataset_dir}")
+        sys.exit(1)
 
     # Keras'ın built-in loader'ı ile klasörden yükle
-    # dataset_digits/0/*.png -> class 0
     train_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        DATASET_DIR,
+        dataset_dir,
         validation_split=0.2,
         subset="training",
         seed=123,
@@ -26,7 +45,7 @@ def main():
     )
 
     val_ds = tf.keras.preprocessing.image_dataset_from_directory(
-        DATASET_DIR,
+        dataset_dir,
         validation_split=0.2,
         subset="validation",
         seed=123,
@@ -65,8 +84,35 @@ def main():
         epochs=EPOCHS
     )
 
-    model.save(MODEL_PATH)
-    print(f"Model kaydedildi: {MODEL_PATH}")
+    # Dizin yoksa oluştur
+    os.makedirs(os.path.dirname(os.path.abspath(model_output)), exist_ok=True)
+    
+    model.save(model_output)
+    print(f"Model kaydedildi: {model_output}")
+
+    # TFLite Dönüşümü
+    if args.tflite_output:
+        print("\n--- Mobil Dönüşüm Başlatılıyor ---")
+        try:
+            # We need to import convert dynamically or via sys.path trick if needed
+            # But since this script is usually run from root, we can try absolute import
+            from src.services.captcha_solver.convert_to_tflite import convert
+            convert(model_path=model_output, tflite_path=args.tflite_output)
+            
+            # If user ONLY wanted tflite? 
+            # The script doesn't know that detailed logic, but manager does.
+            # Usually tool logic: keep h5 as generic artifact, tflite as export.
+            # We keep both unless external tool deletes h5.
+            
+        except ImportError:
+            # Fallback relative import if running next to it
+            try:
+                from convert_to_tflite import convert
+                convert(model_path=model_output, tflite_path=args.tflite_output)
+            except Exception as e:
+                print(f"Conversion import error: {e}")
+        except Exception as e:
+             print(f"Conversion error: {e}")
 
 if __name__ == "__main__":
     main()

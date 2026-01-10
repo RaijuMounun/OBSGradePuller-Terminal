@@ -5,15 +5,6 @@ import os
 
 class CaptchaSolver:
     MODEL_PATH = os.path.join(os.path.dirname(__file__), "digit_model.h5")
-    IMG_HEIGHT = 40
-    IMG_WIDTH = 100
-    
-    # Egitimdeki dilimleme ile ayni olmali
-    SLICES = [
-        (13, 29), 
-        (29, 52),
-        (88, 110)
-    ]
 
     def __init__(self):
         self.model = None
@@ -29,60 +20,79 @@ class CaptchaSolver:
         else:
             print("[UYARI] Model dosyası bulunamadı.")
 
+    def find_character_regions(self, img_gray):
+        """
+        Proxy method to keep backward compatibility or direct usage,
+        delegating to the shared service.
+        """
+        from .segmentation import CaptchaSegmentationService
+        return CaptchaSegmentationService.find_character_regions(img_gray)
+
+    def predict_digit_from_roi(self, roi):
+        if self.model is None: return None
+        
+        from .segmentation import CaptchaSegmentationService
+        blob = CaptchaSegmentationService.preprocess_for_model(roi)
+        
+        if blob is None: return None
+        
+        preds = self.model.predict(blob, verbose=0)
+        return np.argmax(preds)
+
     def solve(self, image_path: str) -> str:
         if not self.model:
             return None
 
         try:
-            # 1. Okuma & Preprocessing (RAW - Filtersiz)
-            img = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
-            if img is None: return None
+            # 1. Read Image
+            img_gray = cv2.imread(image_path, cv2.IMREAD_GRAYSCALE)
+            if img_gray is None: return None
             
-            # Gürültü temizleme KALDIRILDI (Training verisi de raw)
-            # img = cv2.medianBlur(img, 3) 
-            # ...
-            
-            # RESIZE KALDIRILDI - Egitim verisi orjinal boyutlarda (177x40) hazirlandi
-            #img = cv2.resize(img, (self.IMG_WIDTH, self.IMG_HEIGHT))
+            img_h, img_w = img_gray.shape
 
-            # 2. Dilimleme ve Tahmin
-            digits = []
-            for start, end in self.SLICES:
-                roi = img[:, start:end]
-                
-                # Kare yap (32x32) - Padding ile
-                h, w = roi.shape
-                if w == 0 or h == 0: continue
-                
-                top_bottom_pad = 0
-                left_right_pad = max(0, (h - w) // 2)
-                padded = cv2.copyMakeBorder(roi, top_bottom_pad, top_bottom_pad, left_right_pad, left_right_pad, cv2.BORDER_CONSTANT, value=0)
-                
-                # Resize 32x32 (Model girdisi)
-                resized = cv2.resize(padded, (32, 32))
-                resized = resized / 255.0 # Normalize
-                
-                # Batch dim ekle (1, 32, 32, 1)
-                blob = np.expand_dims(resized, axis=-1)
-                blob = np.expand_dims(blob, axis=0)
-                
-                # Tahmin
-                preds = self.model.predict(blob, verbose=0)
-                digit = np.argmax(preds)
-                digits.append(digit)
+            # 2. Smart Segmentation (Delegated)
+            boxes = self.find_character_regions(img_gray)
             
-            if len(digits) != 3:
-                print(f"[HATA] Beklenen 3 rakam bulunamadı, bulunan: {len(digits)}")
+            if len(boxes) < 2:
+                print(f"[UYARI] Yeterli rakam bulunamadı: {len(boxes)}")
+                # Debug icin kaydet
+                # cv2.imwrite("debug_failed_segmentation.png", img_gray)
                 return None
 
-            # 3. Sonuç Oluşturma
-            # xx + x formati
-            d1, d2, d3 = digits
-            num1 = (d1 * 10) + d2
-            num2 = d3
-            result = num1 + num2
+            digits = []
+            for x, y, w, h in boxes:
+                # Add Padding (3px)
+                pad = 3
+                x_start = max(0, x - pad)
+                x_end = min(img_w, x + w + pad)
+                
+                # Full height slice
+                roi = img_gray[0:img_h, x_start:x_end]
+                
+                digit = self.predict_digit_from_roi(roi)
+                if digit is not None:
+                    digits.append(digit)
             
-            print(f"[AI TAHMİN] {d1}{d2} + {d3} = {result}")
+            # 3. Calculate Result
+            # Logic: XX + X (3 digits) or X + X (2 digits)
+            result = 0
+            
+            print(f"[AI RAW] Algılanan Rakamlar: {digits}")
+
+            if len(digits) == 3:
+                # xx + x
+                num1 = (digits[0] * 10) + digits[1]
+                num2 = digits[2]
+                result = num1 + num2
+            elif len(digits) == 2:
+                # x + x
+                num1 = digits[0]
+                num2 = digits[1]
+                result = num1 + num2
+            else:
+                return None
+
+            print(f"[AI TAHMİN] Sonuç: {result}")
             return str(result)
             
         except Exception as e:

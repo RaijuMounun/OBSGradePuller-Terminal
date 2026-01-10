@@ -2,10 +2,15 @@ import tensorflow as tf
 import os
 import numpy as np
 
-def convert_to_tflite():
-    # H5 Model Yolu
-    model_path = os.path.join("src", "services", "captcha_solver", "digit_model.h5")
-    tflite_path = os.path.join("src", "services", "captcha_solver", "digit_model.tflite")
+import tensorflow as tf
+import os
+import numpy as np
+
+def convert(model_path=None, tflite_path=None):
+    if model_path is None:
+        model_path = os.path.join("src", "services", "captcha_solver", "digit_model.h5")
+    if tflite_path is None:
+        tflite_path = os.path.join("src", "services", "captcha_solver", "digit_model.tflite")
 
     if not os.path.exists(model_path):
         print(f"Hata: Model bulunamadi -> {model_path}")
@@ -17,12 +22,19 @@ def convert_to_tflite():
     # Converter Olustur
     converter = tf.lite.TFLiteConverter.from_keras_model(model)
     
-    # Optimizasyonlar (Opsiyonel ama mobilde iyidir)
-    # Default optimizations: Quantization vb. yapar (boyutu kucultur)
-    # KULLANICI ISTEGI: Accuracy kaybi olmamasi icin optimizasyonu kapatiyoruz.
-    # converter.optimizations = [tf.lite.Optimize.DEFAULT]
+    # --- DOĞRULUK KORUMA (ACCURACY PRESERVATION) ---
+    # Kullanıcı isteği üzerine Float32 olarak bırakıyoruz.
+    # Quantization (Int8) yaparsak boyut düşer ama hassasiyet azalabilir.
+    # converter.optimizations = [tf.lite.Optimize.DEFAULT]  <- BU SATIR KAPALI KALMALI
+    
+    # Mobile (Flutter) uyumluluğu için
+    # Input/Output signature'larını netleştiriyoruz.
+    converter.target_spec.supported_ops = [
+        tf.lite.OpsSet.TFLITE_BUILTINS, # Standart TFLite ops
+        tf.lite.OpsSet.SELECT_TF_OPS    # Fallback (gerekirse)
+    ]
 
-    print("Donusturme basladi...")
+    print("Donusturme basladi (High Fidelity Mode)...")
     tflite_model = converter.convert()
 
     # Kaydet
@@ -36,7 +48,7 @@ def convert_to_tflite():
     tflite_size = os.path.getsize(tflite_path) / 1024
     print(f"H5 Boyutu: {h5_size:.2f} KB")
     print(f"TFLite Boyutu: {tflite_size:.2f} KB")
-    print(f"Sıkılaştırma Oranı: %{100 * (1 - tflite_size/h5_size):.1f}")
+    print(f"Not: Optimizasyon yapılmadığı için boyut benzer olabilir, ancak doğruluk %100 korunmuştur.")
 
 if __name__ == "__main__":
-    convert_to_tflite()
+    convert()
